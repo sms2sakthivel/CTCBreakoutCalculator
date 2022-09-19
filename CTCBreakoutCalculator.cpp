@@ -162,7 +162,7 @@ public:
             << "TotalTax    : \033[1;31m" << obj._tds + obj._cess + obj._surcharge << "\033[0m" << std::endl
             << "TakeHome    : " << obj._take_home << std::endl
             << "TakeHome PM : \033[1;32m" << obj._take_home / 12 << "\033[0m" << std::endl
-            << std::endl
+            << std::endl;
         return out;
     }
 };

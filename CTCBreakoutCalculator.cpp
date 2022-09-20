@@ -1,6 +1,9 @@
 #include <iostream>
 #include <unordered_map>
 #include <string>
+#include <fstream>
+#include <locale>
+#include <iomanip>
 
 constexpr float operator"" _percent(unsigned long long percent)
 {
@@ -38,7 +41,6 @@ namespace TaxRates
         {TAX_SLAB::SLAB_250001_500000, 5_percent},
         {TAX_SLAB::SLAB_500001_1000000, 20_percent},
         {TAX_SLAB::SLAB_ABOVE_1000001, 30_percent}};
-  
     std::unordered_map<SURCHARGE_SLAB, float> surcharge_slabs{
         {SURCHARGE_SLAB::S_SLAB_0_5000000, 0_percent},
         {SURCHARGE_SLAB::S_SLAB_5000000_10000000, 10_percent},
@@ -46,13 +48,11 @@ namespace TaxRates
         {SURCHARGE_SLAB::S_SLAB_20000001_50000000, 25_percent},
         {SURCHARGE_SLAB::S_SLAB_50000001_100000000, 37_percent},
         {SURCHARGE_SLAB::S_SLAB_ABOVE_100000001, 37_percent}};
-  
     std::unordered_map<TAX_SLAB, float> health_and_education_cess{
         {TAX_SLAB::SLAB_0_250000, 0_percent},
         {TAX_SLAB::SLAB_250001_500000, 4_percent},
         {TAX_SLAB::SLAB_500001_1000000, 4_percent},
         {TAX_SLAB::SLAB_ABOVE_1000001, 4_percent}};
-    
     std::unordered_map<TAX_SLAB, int> minimum_tax{
         {TAX_SLAB::SLAB_0_250000, 0},
         {TAX_SLAB::SLAB_250001_500000, 0},
@@ -113,10 +113,10 @@ namespace TaxRates
 class CTCBreakoutCalculator
 {
 private:
-    int _ctc, _tds, _eepf, _erpf, _gratuvity, _base, _take_home, _taxable, _cess, _surcharge;
+    float _ctc, _tds, _eepf, _erpf, _gratuvity, _base, _take_home, _taxable, _cess, _surcharge;
 
 public:
-    CTCBreakoutCalculator(int ctc)
+    CTCBreakoutCalculator(float ctc)
     {
         _ctc = ctc;
         _base = _ctc * 40_percent;
@@ -150,18 +150,42 @@ public:
 
     friend std::ostream &operator<<(std::ostream &out, const CTCBreakoutCalculator &obj)
     {
-        out << "CTC         : " << obj._ctc << std::endl
-            << "Base        : " << obj._base << std::endl
-            << "EEPF        : " << obj._eepf << std::endl
-            << "ERPF        : " << obj._erpf << std::endl
-            << "Gratuvity   : " << obj._gratuvity << std::endl
-            << "Taxable     : " << obj._taxable << std::endl
-            << "CESS        : " << obj._cess << std::endl
-            << "Surcharge   : " << obj._surcharge << std::endl
-            << "TDS         : " << obj._tds << std::endl
-            << "TotalTax    : \033[1;31m" << obj._tds + obj._cess + obj._surcharge << "\033[0m" << std::endl
-            << "TakeHome    : " << obj._take_home << std::endl
-            << "TakeHome PM : \033[1;32m" << obj._take_home / 12 << "\033[0m" << std::endl
+        out.imbue(std::locale("en_IN.UTF-8"));
+        out << std::showbase;
+        out << "CTC         : " << std::put_money(obj._ctc * 100) << std::endl
+            << "Base        : " << std::put_money(obj._base * 100) << std::endl
+            << "EEPF        : " << std::put_money(obj._eepf * 100) << std::endl
+            << "ERPF        : " << std::put_money(obj._erpf * 100) << std::endl
+            << "Gratuvity   : " << std::put_money(obj._gratuvity * 100) << std::endl
+            << "Taxable     : " << std::put_money(obj._taxable * 100) << std::endl
+            << "CESS        : " << std::put_money(obj._cess * 100) << std::endl
+            << "Surcharge   : " << std::put_money(obj._surcharge * 100) << std::endl
+            << "TDS         : " << std::put_money(obj._tds * 100) << std::endl
+            << "TotalTax    : \033[1;31m" << std::put_money((obj._tds + obj._cess + obj._surcharge) * 100) << "\033[0m" << std::endl
+            << "TakeHome    : " << std::put_money(obj._take_home * 100) << std::endl
+            << "TakeHome PM : \033[1;32m" << std::put_money((obj._take_home / 12) * 100) << "\033[0m" << std::endl
+            << std::endl
+            << std::endl;
+        return out;
+    }
+
+    friend std::ofstream &operator<<(std::ofstream &out, const CTCBreakoutCalculator &obj)
+    {
+        out.imbue(std::locale("en_IN.UTF-8"));
+        out << std::showbase;
+        out << "CTC         : " << std::put_money(obj._ctc * 100) << std::endl
+            << "Base        : " << std::put_money(obj._base * 100) << std::endl
+            << "EEPF        : " << std::put_money(obj._eepf * 100) << std::endl
+            << "ERPF        : " << std::put_money(obj._erpf * 100) << std::endl
+            << "Gratuvity   : " << std::put_money(obj._gratuvity * 100) << std::endl
+            << "Taxable     : " << std::put_money(obj._taxable * 100) << std::endl
+            << "CESS        : " << std::put_money(obj._cess * 100) << std::endl
+            << "Surcharge   : " << std::put_money(obj._surcharge * 100) << std::endl
+            << "TDS         : " << std::put_money(obj._tds * 100) << std::endl
+            << "TotalTax    : " << std::put_money((obj._tds + obj._cess + obj._surcharge) * 100) << std::endl
+            << "TakeHome    : " << std::put_money(obj._take_home * 100) << std::endl
+            << "TakeHome PM : " << std::put_money((obj._take_home / 12) * 100) << std::endl
+            << std::endl
             << std::endl;
         return out;
     }
@@ -169,15 +193,19 @@ public:
 
 int main(int argc, char **argv)
 {
+    std::ofstream file("SalaryBreakout.txt");
     if (argc == 2)
     {
-        CTCBreakoutCalculator ctc(std::stoi(argv[1]));
+        CTCBreakoutCalculator ctc(std::stof(argv[1]));
         std::cout << ctc;
+        file << ctc;
     }
     else
     {
         CTCBreakoutCalculator ctc(0);
         std::cout << ctc;
+        file << ctc;
     }
+    file.close();
     return 0;
 }

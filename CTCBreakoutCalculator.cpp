@@ -41,6 +41,7 @@ namespace TaxRates
         {TAX_SLAB::SLAB_250001_500000, 5_percent},
         {TAX_SLAB::SLAB_500001_1000000, 20_percent},
         {TAX_SLAB::SLAB_ABOVE_1000001, 30_percent}};
+
     std::unordered_map<SURCHARGE_SLAB, float> surcharge_slabs{
         {SURCHARGE_SLAB::S_SLAB_0_5000000, 0_percent},
         {SURCHARGE_SLAB::S_SLAB_5000000_10000000, 10_percent},
@@ -48,16 +49,26 @@ namespace TaxRates
         {SURCHARGE_SLAB::S_SLAB_20000001_50000000, 25_percent},
         {SURCHARGE_SLAB::S_SLAB_50000001_100000000, 37_percent},
         {SURCHARGE_SLAB::S_SLAB_ABOVE_100000001, 37_percent}};
+
     std::unordered_map<TAX_SLAB, float> health_and_education_cess{
         {TAX_SLAB::SLAB_0_250000, 0_percent},
         {TAX_SLAB::SLAB_250001_500000, 4_percent},
         {TAX_SLAB::SLAB_500001_1000000, 4_percent},
         {TAX_SLAB::SLAB_ABOVE_1000001, 4_percent}};
+
     std::unordered_map<TAX_SLAB, int> minimum_tax{
         {TAX_SLAB::SLAB_0_250000, 0},
         {TAX_SLAB::SLAB_250001_500000, 0},
         {TAX_SLAB::SLAB_500001_1000000, 12500},
         {TAX_SLAB::SLAB_ABOVE_1000001, 112500}};
+
+    std::unordered_map<SURCHARGE_SLAB, int> minimum_surcharge{
+        {SURCHARGE_SLAB::S_SLAB_0_5000000, 0},
+        {SURCHARGE_SLAB::S_SLAB_5000000_10000000, 0},
+        {SURCHARGE_SLAB::S_SLAB_10000001_20000000, 1'50'000},   // 1cr - 50lakhs = (50lakhs * 30%) * 10% = 1,50,000
+        {SURCHARGE_SLAB::S_SLAB_20000001_50000000, 6'00'000},   // 1'50'000 + (2cr - 1cr = (1cr * 30%) * 15% = 4,50,000)
+        {SURCHARGE_SLAB::S_SLAB_50000001_100000000, 28'50'000}, // 6'00'000 + (5cr - 2cr = (3cr * 30%) * 25% = 22,50,000)
+        {SURCHARGE_SLAB::S_SLAB_ABOVE_100000001, 84'00'000}};   // 28'50'000 + (10cr - 5cr = (5cr * 30%) * 37% = 55,50,000)
 
     SURCHARGE_SLAB get_surcharge_from_taxable_income(int &taxable_income)
     {
@@ -93,6 +104,25 @@ namespace TaxRates
     float get_surcharge(int taxable_income) { return surcharge_slabs[get_surcharge_from_taxable_income(taxable_income)]; }
     float get_health_and_education_cess(int taxable_income) { return health_and_education_cess[get_tax_slab_taxable_income(taxable_income)]; }
     int get_minimum_tax(int taxable_income) { return minimum_tax[get_tax_slab_taxable_income(taxable_income)]; }
+    int get_minimum_surcharge(int taxable_income) { return minimum_surcharge[get_surcharge_from_taxable_income(taxable_income)]; }
+
+    int get_surchargable_amount_after_minimum_surcharge(int taxable_income)
+    {
+        auto slab = get_surcharge_from_taxable_income(taxable_income);
+        if (slab == SURCHARGE_SLAB::S_SLAB_0_5000000)
+            return 0;
+        if (slab == SURCHARGE_SLAB::S_SLAB_5000000_10000000)
+            return taxable_income - 50'00'000;
+        if (slab == SURCHARGE_SLAB::S_SLAB_10000001_20000000)
+            return taxable_income - 1'00'00'000;
+        if (slab == SURCHARGE_SLAB::S_SLAB_20000001_50000000)
+            return taxable_income - 2'00'00'000;
+        if (slab == SURCHARGE_SLAB::S_SLAB_50000001_100000000)
+            return taxable_income - 5'00'00'000;
+        if (slab == SURCHARGE_SLAB::S_SLAB_ABOVE_100000001)
+            return taxable_income - 10'00'00'000;
+        return 0;
+    }
     int get_taxable_after_minimum_tax(int taxable_income)
     {
         auto slab = get_tax_slab_taxable_income(taxable_income);
@@ -113,10 +143,10 @@ namespace TaxRates
 class CTCBreakoutCalculator
 {
 private:
-    float _ctc, _tds, _eepf, _erpf, _gratuvity, _base, _take_home, _taxable, _cess, _surcharge;
+    double _ctc, _tds, _eepf, _erpf, _gratuvity, _base, _take_home, _taxable, _cess, _surcharge;
 
 public:
-    CTCBreakoutCalculator(float ctc)
+    CTCBreakoutCalculator(double ctc)
     {
         _ctc = ctc;
         _base = _ctc * 40_percent;
@@ -144,8 +174,19 @@ public:
             return _tds;
         _tds = TaxRates::get_minimum_tax(_taxable) + TaxRates::get_taxable_after_minimum_tax(_taxable) * TaxRates::get_tax_slab(_taxable);
         _cess = _tds * TaxRates::get_health_and_education_cess(_taxable);
-        _surcharge = _tds * TaxRates::get_surcharge(_taxable);
+        get_surcharge();
         return _tds + _cess + _surcharge;
+    }
+
+    float get_surcharge()
+    {
+        _surcharge = TaxRates::get_minimum_surcharge(_taxable);
+        const int amount = TaxRates::get_surchargable_amount_after_minimum_surcharge(_taxable);
+        if (amount)
+        {
+            _surcharge += amount * 30_percent * TaxRates::get_surcharge(_taxable);
+        }
+        return _surcharge;
     }
 
     friend std::ostream &operator<<(std::ostream &out, const CTCBreakoutCalculator &obj)
@@ -164,7 +205,8 @@ public:
             << "TotalTax    : \033[1;31m" << std::put_money((obj._tds + obj._cess + obj._surcharge) * 100) << "\033[0m" << std::endl
             << "TakeHome    : " << std::put_money(obj._take_home * 100) << std::endl
             << "TakeHome PM : \033[1;32m" << std::put_money((obj._take_home / 12) * 100) << "\033[0m" << std::endl
-            << std::endl
+            << "TakeHome %  : " << std::fixed << std::setprecision(2) << (obj._take_home / obj._ctc) * 100 << std::endl
+            << "Tax %       : " << std::fixed << std::setprecision(2) << ((obj._tds + obj._cess + obj._surcharge) / obj._ctc) * 100 << std::endl
             << std::endl;
         return out;
     }
@@ -185,7 +227,8 @@ public:
             << "TotalTax    : " << std::put_money((obj._tds + obj._cess + obj._surcharge) * 100) << std::endl
             << "TakeHome    : " << std::put_money(obj._take_home * 100) << std::endl
             << "TakeHome PM : " << std::put_money((obj._take_home / 12) * 100) << std::endl
-            << std::endl
+            << "TakeHome %  : " << std::fixed << std::setprecision(2) << (obj._take_home / obj._ctc) * 100 << std::endl
+            << "Tax %       : " << std::fixed << std::setprecision(2) << ((obj._tds + obj._cess + obj._surcharge) / obj._ctc) * 100 << std::endl
             << std::endl;
         return out;
     }
@@ -196,7 +239,7 @@ int main(int argc, char **argv)
     std::ofstream file("SalaryBreakout.txt");
     if (argc == 2)
     {
-        CTCBreakoutCalculator ctc(std::stof(argv[1]));
+        CTCBreakoutCalculator ctc(std::stod(argv[1]));
         std::cout << ctc;
         file << ctc;
     }
